@@ -341,17 +341,56 @@ python -m clipper.main
 
 export function generateReadme(state: PipelineState): string {
   const activeNames = state.channels.filter((c) => c.enabled).map((c) => c.nome).join(' / ') || 'Custom Channels';
+  const firstChannel = state.channels.find((c) => c.enabled) ?? state.channels[0];
+  const testTarget = firstChannel
+    ? `${firstChannel.plataforma}:${firstChannel.canal.replace(/^@/, '')}:${firstChannel.idioma}:${firstChannel.deteccao}`
+    : 'twitch:kaicenat:en:ambos';
+
   return `# ${state.repo.repoName || 'livecut-en'}
 
-Automated 24/7 livestream-to-short-clip pipeline based on [Teodorox/livecut-ai](https://github.com/Teodorox/livecut-ai) (requires Python >= 3.12).
+Automated 24/7 livestream-to-short-clip pipeline powered by \`faster-whisper\`, Claude curation, and FFmpeg rendering, built on [Teodorox/livecut-ai](https://github.com/Teodorox/livecut-ai) (MIT).
 
-- **Channels**: ${activeNames}
-- **Target format**: ${state.general.layout_video === 'vertical' ? '9:16 Vertical' : '4:5 News Card'} · Subtitle style: \`${state.general.estilo_legenda}\`
-- **Fixed tags**: \`[streamer]\`, ${state.hashtags.map((t) => `\`${t}\``).join(', ')}
-- **Claude model**: configurable via \`CLAUDE_MODEL\` in \`.env\` (default: \`${state.ai.model}\`, ~$0.04 opus / ~$0.02 sonnet per analysis)
+## Profile Summary
 
-Russian setup guide: [SETUP_RU.md](SETUP_RU.md).
-Check upstream license before making a fork public; keep the repository private if no license is present.
+- **Channels:** ${activeNames}
+- **Target format:** ${state.general.layout_video === 'vertical' ? '9:16 Vertical' : '4:5 News Card'} · Subtitle style: \`${state.general.estilo_legenda}\`
+- **Fixed tags:** \`[streamer]\`, ${state.hashtags.map((t) => `\`${t}\``).join(', ')}
+- **Claude model:** \`${state.ai.model}\` (overridable via \`CLAUDE_MODEL\` in \`.env\`)
+- **Daily guardrails:** \`$${state.ai.orcamento_diario_usd.toFixed(2)}/day\` · max \`${state.ai.limite_analises_hora}/hr\` · min score \`${state.ai.nota_minima}/10\`
+
+## Quickstart (Windows 10/11)
+
+### 1. Prerequisites
+- **Python 3.12 or 3.13** (Python 3.11 is unsupported due to PEP 701 f-strings in \`clipper/render.py\`)
+- **FFmpeg & ffprobe** in \`PATH\` (\`winget install Gyan.FFmpeg\`)
+- Optional NVIDIA GPU for \`large-v3-turbo\` Whisper + \`h264_nvenc\`
+
+### 2. Install Dependencies
+\`\`\`powershell
+py -3.12 -m venv .venv
+.\\.venv\\Scripts\\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+\`\`\`
+
+### 3. Configure \`.env\`
+Copy \`.env.example\` to \`.env\` (never commit \`.env\` or \`config.toml\`) and fill in:
+- \`ANTHROPIC_API_KEY\` — from [console.anthropic.com](https://console.anthropic.com)
+- \`TELEGRAM_BOT_TOKEN\` & \`TELEGRAM_CHAT_ID\` — from \`@BotFather\` and \`@userinfobot\` (send \`/start\` to your bot first)
+- \`YOUTUBE_API_KEY\` — YouTube Data API v3 key (for YouTube live chat)
+- \`WHISPER_CPU_MODEL=medium\` — recommended when running on CPU without CUDA
+
+### 4. Smoke Test & Run 24/7
+\`\`\`powershell
+python -m clipper.main --canal ${testTarget}
+.\\iniciar.bat
+\`\`\`
+
+- **Calibration (days 1–3):** Keep \`aprovacao_manual = true\` in \`config.toml\` and review previews in Telegram (**Analyze with AI / Discard / Use full segment**).
+- **Autopilot:** Set \`aprovacao_manual = false\` once false positives are low, and run \`iniciar.bat\` via Windows Task Scheduler (**At log on**, logged-in session for GPU access).
+- **Telegram commands:** \`/status\`, \`/clip <streamer>\`, \`/refazer <id>\`, \`/saldo\`, \`/saldo 25.00\`, \`/ajuda\`.
+
+Russian setup guide: [SETUP_RU.md](SETUP_RU.md). Upstream \`Teodorox/livecut-ai\` is MIT-licensed (Copyright (c) 2026 Teodorox).
 `;
 }
 
