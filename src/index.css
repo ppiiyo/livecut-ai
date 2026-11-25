@@ -2,9 +2,9 @@
 
 @layer base {
   :root {
-    --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
-    --font-sans: "DM Sans", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --font-display: "Manrope Variable", system-ui, sans-serif;
+    --font-sans: "Inter Variable", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
   }
 
   body {

@@ -1,50 +1,52 @@
 # LiveCut Studio
 
-**LiveCut Studio** — 100% клиентский веб-конфигуратор и генератор патч-кита для Python-конвейера автонарезки стримов [`Teodorox/livecut-ai`](https://github.com/Teodorox/livecut-ai).
+Клиентский веб-конфигуратор и генератор готового пакета файлов (`config.toml`, `.env.example` / `.env`, `apply_en_patch.py`, `SETUP_RU.md`, `README.md` и ZIP-архив) для Python-конвейера автонарезки стримов [`Teodorox/livecut-ai`](https://github.com/Teodorox/livecut-ai).
 
-Приложение работает полностью в браузере (без сервера и без вызова AI API), позволяя настроить каналы Twitch/YouTube/Kick, пороги детектора, системный промпт куратора, бюджет Claude, протестировать реакции и всплески чата и выгрузить готовый ZIP-архив для запуска конвейера на Windows.
+- **Live Demo (GitHub Pages)**: https://ppiiyo.github.io/livecut-ai/
+- **Релизные пакеты (ZIP)**: раздел [Releases](https://github.com/ppiiyo/livecut-ai/releases)
 
-## Быстрый старт (разработка Studio)
+## Возможности
+
+- **Конфигуратор конвейера и каналов**: стартовые пресеты (`EN GTA 6`, `RU GTA 6`, `EN Gaming`), редактор таблицы `[[canais]]` со строгой проверкой slug'ов Twitch / Kick / YouTube и координатами `facecam = [x, y, w, h]`, калькулятор дневного/месячного расхода Claude (`claude-opus-5-5` / `claude-sonnet-5-5`), редактор `SYSTEM`-промпта и хэштегов.
+- **Экспорт и импорт JSON-бэкапа**: сохранение и перенос конфигурации (`schemaVersion: 2`) между браузерами. Секретные ключи в бэкап никогда не попадают.
+- **Симулятор детектора и клипов**: предпросмотр `9:16 vertical` и `4:5 noticia`, симуляция кнопок Telegram-куратора, тестирование rate-spike детектора и одиночных сообщений чата на реакции и спам-маски (`*`-стемминг).
+- **Безопасный конструктор `.env` и экспорт в ZIP**: секреты живут только в памяти текущей вкладки (не записываются в `localStorage`), по умолчанию маскируются в `.env.example`, а сборка ZIP выполняется полностью локально.
+- **Совместимый патч `apply_en_patch.py`**: автоматические `.bak_*` резервные копии, проверка `ast.parse` и `tomllib.loads` (Python 3.11+) и защита существующего `config.toml` (создание sidecar `config.en.toml` + `SKIP`).
+
+## Безопасность и приватность
+
+LiveCut Studio — **100% клиентское статическое приложение**: без бэкенда, баз данных, внешних CDN (шрифты `@fontsource-variable/*` встроены локально) и телеметрии. В production-сборке (`npm run build`) в `index.html` внедряется строгий `Content-Security-Policy` с `connect-src 'none'`. Подробнее: [`SECURITY.md`](./SECURITY.md) и [`PRIVACY.md`](./PRIVACY.md).
+
+## Локальный запуск и разработка
 
 ```bash
-npm i
-npm run dev       # http://localhost:3000
-npm test          # unit-тесты генераторов, валидации, storage и ZIP
-npm run lint      # strict TypeScript (tsc --noEmit)
-npm run build     # production-сборка в dist/
+npm ci
+npm run dev
 ```
 
-## Как применить сгенерированный кит к `Teodorox/livecut-ai`
+Приложение откроется на `http://localhost:3000`.
 
-1. Настройте каналы, формат (`9:16 vertical` или `4:5 noticia`), промпт, бюджет и параметры детектора в LiveCut Studio.
-2. Перейдите на вкладку **«Сборка и экспорт»** и нажмите **«Скачать пакет (.zip)»**.
-3. Клонируйте upstream-репозиторий и распакуйте архив в корень клона:
+### Проверка и сборка
 
-```bat
-git clone https://github.com/Teodorox/livecut-ai.git livecut-en
-cd livecut-en
-python apply_en_patch.py
+```bash
+npm run lint           # ESLint + tsc --noEmit
+npm test               # unit и golden тесты (node:test)
+npm run test:coverage  # покрытие кода тестами
+npm run build          # production-сборка (dist/)
+npm run check:bundle   # контроль бюджета начального JS-бандла (<= 250 KB gzip)
+npm run make:kit       # генерация дефолтного кита в kit-dist/
+npm run test:e2e       # Playwright smoke-тест на production preview
 ```
 
-4. Скрипт `apply_en_patch.py`:
-   - создаёт резервные копии изменяемых файлов в `_backup_pre_en/`;
-   - проверяет синтаксис Python-файлов через `ast.parse` и валидность TOML через `tomllib.loads` (Python 3.11+);
-   - **не перезаписывает** существующий `config.toml` (пишет сайдкар `config.en.toml` со статусом `SKIP`);
-   - идемпотентен при повторном запуске и формирует отчёт `PATCH_REPORT.txt`.
+Для сборки под GitHub Pages (`base: '/livecut-ai/'`):
 
-## Безопасность ключей
+```bash
+GITHUB_PAGES=true npm run build
+```
 
-- Введённые во вкладке **«Ключи и чек-лист»** значения (`ANTHROPIC_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TWITCH_CLIENT_SECRET`, `YOUTUBE_API_KEY` и прокси) хранятся **только в оперативной памяти вкладки** и **не записываются** в `localStorage`.
-- По умолчанию в экспортируемом `.env.example` секреты пустые; включение введённых значений в `.env` при выгрузке выполняется только явной галочкой в текущей сессии.
+## Документация и лицензия
 
-## Лицензия и upstream
-
-- Код **LiveCut Studio** распространяется по лицензии **MIT** (см. [`LICENSE`](LICENSE)).
-- **Важно**: лицензию upstream-репозитория `Teodorox/livecut-ai` проверьте перед публикацией форка конвейера; если лицензии нет — держите форк приватным.
-
-## Roadmap (P2)
-
-- Импорт существующего `config.toml` (обратный парсинг) для редактирования настроенного конвейера.
-- Опциональный локальный сервер для отображения живого `/status` конвейера.
-- Предпросмотр реального рендера клипа в браузере через `ffmpeg.wasm`.
-- Поддержка `chat_youtube` (зеркало Kick → YouTube) в конфигураторе.
+- Архитектура: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- Руководство контрибьютора и откат: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- История изменений: [`CHANGELOG.md`](./CHANGELOG.md)
+- Лицензия LiveCut Studio: [MIT](./LICENSE). Внешний конвейер `Teodorox/livecut-ai` является отдельным upstream-проектом со своей лицензией и условиями распространения.

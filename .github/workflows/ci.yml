@@ -6,16 +6,53 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  build-and-test:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and TypeScript check
+        run: npm run lint
+
+      - name: Unit & golden tests with coverage
+        run: npm run test:coverage
+
+      - name: Production build & bundle budget
+        run: npm run build && npm run check:bundle
+
+      - name: Generate kit and verify Python/TOML syntax
+        run: |
+          npm run make:kit
+          python3 -m py_compile kit-dist/apply_en_patch.py
+          python3 -c "import tomllib; tomllib.load(open('kit-dist/config.toml', 'rb'))"
+
+      - name: Security audit (high+)
+        run: npm audit --audit-level=high
+
+      - name: Install Playwright Chromium & run E2E smoke
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_STATE } from '../data/presets';
-import { parseStoredPipelineState, serializeStateWithoutSecrets } from './storage';
+import {
+  BACKUP_SCHEMA_VERSION,
+  exportStateBackupJson,
+  parseStateBackupJson,
+  parseStoredPipelineState,
+  serializeStateWithoutSecrets
+} from './storage';
 import { validateChannelSlug, validatePipelineForExport } from './validation';
 
 test('validateChannelSlug enforces Twitch/Kick and YouTube rules', () => {
@@ -45,4 +51,35 @@ test('storage strips secrets on serialize and falls back cleanly on malformed JS
     channels: [{ ...DEFAULT_STATE.channels[0], layout: 'split' }]
   });
   assert.deepEqual(parseStoredPipelineState(legacyWithSplit), DEFAULT_STATE);
+});
+
+test('backup export/import roundtrips state without secrets and rejects invalid backups', () => {
+  const customState = {
+    ...DEFAULT_STATE,
+    general: { ...DEFAULT_STATE.general, perfil_tiktok: '@my_custom_clipper' },
+    env: { ...DEFAULT_STATE.env, anthropicKey: 'sk-ant-do-not-export' }
+  };
+  const json = exportStateBackupJson(customState);
+  assert.equal(json.includes('sk-ant-do-not-export'), false);
+
+  const parsedEnvelope = JSON.parse(json) as { schemaVersion: number };
+  assert.equal(parsedEnvelope.schemaVersion, BACKUP_SCHEMA_VERSION);
+
+  const okResult = parseStateBackupJson(json);
+  assert.equal(okResult.ok, true);
+  if (okResult.ok) {
+    assert.equal(okResult.state.general.perfil_tiktok, '@my_custom_clipper');
+    assert.equal(okResult.state.env.anthropicKey, '');
+  }
+
+  const wrongVersion = parseStateBackupJson(JSON.stringify({ schemaVersion: 99, state: customState }));
+  assert.equal(wrongVersion.ok, false);
+
+  const invalidJson = parseStateBackupJson('{not json');
+  assert.equal(invalidJson.ok, false);
+
+  const invalidShape = parseStateBackupJson(
+    JSON.stringify({ schemaVersion: BACKUP_SCHEMA_VERSION, state: { presetId: 'unknown' } })
+  );
+  assert.equal(invalidShape.ok, false);
 });

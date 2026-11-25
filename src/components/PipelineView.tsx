@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState } from 'react';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, AlertTriangle, Download, Upload } from 'lucide-react';
 import {
   ChannelConfig,
   ChannelLayout,
@@ -13,11 +13,14 @@ import {
 } from '../types/pipeline';
 import { PRESET_METADATA } from '../data/presets';
 import { estimateMonthlyCost } from '../utils/generator';
+import { exportStateBackupJson, parseStateBackupJson } from '../utils/storage';
 import { validateChannelSlug, validateTiktokProfile } from '../utils/validation';
 
 interface PipelineViewProps {
   state: PipelineState;
   onApplyPreset: (presetId: PresetId) => void;
+  onImportState: (nextState: PipelineState) => void;
+  onAnnounce?: (message: string) => void;
   onUpdateGeneral: <K extends keyof PipelineState['general']>(key: K, value: PipelineState['general'][K]) => void;
   onUpdateDetector: <K extends keyof PipelineState['detector']>(key: K, value: PipelineState['detector'][K]) => void;
   onUpdateAi: <K extends keyof PipelineState['ai']>(key: K, value: PipelineState['ai'][K]) => void;
@@ -34,6 +37,8 @@ const DEFAULT_FACECAM: [number, number, number, number] = [0.02, 0.65, 0.25, 0.3
 export function PipelineView({
   state,
   onApplyPreset,
+  onImportState,
+  onAnnounce,
   onUpdateGeneral,
   onUpdateDetector,
   onUpdateAi,
@@ -53,6 +58,8 @@ export function PipelineView({
   const [newMinMsgs, setNewMinMsgs] = useState(30);
   const [channelError, setChannelError] = useState('');
   const [tagDraft, setTagDraft] = useState(state.hashtags.join(', '));
+  const [backupMessage, setBackupMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTagDraft(state.hashtags.join(', '));
@@ -74,6 +81,45 @@ export function PipelineView({
 
   const liveSlugError = newHandle.trim() ? validateChannelSlug(newPlatform, newHandle) : null;
   const tiktokError = validateTiktokProfile(state.general.perfil_tiktok);
+
+  const handleExportBackup = () => {
+    const json = exportStateBackupJson(state);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${state.repo.repoName || 'livecut-en'}-backup.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    const msg = 'Бэкап настроек скачан без секретных ключей.';
+    setBackupMessage({ type: 'ok', text: msg });
+    onAnnounce?.(msg);
+  };
+
+  const handleImportBackupFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const result = parseStateBackupJson(text);
+      if (!result.ok) {
+        setBackupMessage({ type: 'error', text: result.error });
+        onAnnounce?.(result.error);
+        return;
+      }
+      onImportState(result.state);
+      const msg = 'Конфигурация успешно восстановлена из JSON-бэкапа.';
+      setBackupMessage({ type: 'ok', text: msg });
+      onAnnounce?.(msg);
+    } catch {
+      const err = 'Не удалось прочитать выбранный файл.';
+      setBackupMessage({ type: 'error', text: err });
+      onAnnounce?.(err);
+    }
+  };
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +160,7 @@ export function PipelineView({
     <div className="space-y-8">
       {/* 1. Пресет ниши */}
       <section aria-labelledby="preset-heading" className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
             <h2 id="preset-heading" className="text-base font-semibold text-slate-900">
               01. Ниша и стартовый пресет
@@ -123,7 +169,45 @@ export function PipelineView({
               Переключение пресета сразу настраивает каналы, системный промпт куратора и словарь реакций.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportBackup}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              Скачать бэкап (.json)
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+              Загрузить бэкап
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleImportBackupFile}
+              className="sr-only"
+              aria-label="Выбрать JSON-файл бэкапа конфигурации"
+            />
+          </div>
         </div>
+        {backupMessage && (
+          <div
+            role={backupMessage.type === 'error' ? 'alert' : 'status'}
+            className={`px-3.5 py-2.5 rounded-lg border text-xs ${
+              backupMessage.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {backupMessage.text}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {(Object.keys(PRESET_METADATA) as PresetId[]).map((id) => {

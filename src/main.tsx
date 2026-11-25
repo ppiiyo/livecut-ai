@@ -1,3 +1,6 @@
+import '@fontsource-variable/inter';
+import '@fontsource-variable/manrope';
+import '@fontsource-variable/jetbrains-mono';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';

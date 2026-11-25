@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { PackageCheck } from 'lucide-react';
 import {
   ChannelConfig,
@@ -22,10 +22,17 @@ import {
 } from './utils/storage';
 import { Sidebar } from './components/Sidebar';
 import { PipelineView } from './components/PipelineView';
-import { SimulatorView } from './components/SimulatorView';
-import { SetupView } from './components/SetupView';
-import { ExportView } from './components/ExportView';
 import { ConfirmDialog } from './components/ConfirmDialog';
+
+const SimulatorView = lazy(() =>
+  import('./components/SimulatorView').then((m) => ({ default: m.SimulatorView }))
+);
+const SetupView = lazy(() =>
+  import('./components/SetupView').then((m) => ({ default: m.SetupView }))
+);
+const ExportView = lazy(() =>
+  import('./components/ExportView').then((m) => ({ default: m.ExportView }))
+);
 
 const VIEW_TITLES: Record<ViewId, string> = {
   pipeline: 'Конвейер и каналы',
@@ -54,6 +61,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewId>('pipeline');
   const [clips, setClips] = useState<SimulatedClip[]>(INITIAL_SIMULATED_CLIPS);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState('');
 
   useEffect(() => {
     try {
@@ -62,6 +70,11 @@ export default function App() {
       // Ignore storage quota errors
     }
   }, [state]);
+
+  const announce = (message: string) => {
+    setLiveAnnouncement('');
+    requestAnimationFrame(() => setLiveAnnouncement(message));
+  };
 
   const applyPresetNow = (presetId: PresetId) => {
     const meta = PRESET_METADATA[presetId];
@@ -210,6 +223,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50 text-slate-900">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
+      >
+        Перейти к содержимому
+      </a>
+
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveAnnouncement}
+      </div>
+
       <Sidebar
         activeView={activeView}
         onSelectView={setActiveView}
@@ -223,10 +247,10 @@ export default function App() {
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between gap-8 shrink-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <span className="text-slate-500 whitespace-nowrap">Проекты</span>
-            <span className="text-slate-300" aria-hidden="true">/</span>
-            <span className="text-slate-500 whitespace-nowrap truncate">{state.repo.repoName || 'livecut-en'}</span>
-            <span className="text-slate-300" aria-hidden="true">/</span>
+            <span className="hidden sm:inline text-slate-500 whitespace-nowrap">Проекты</span>
+            <span className="hidden sm:inline text-slate-300" aria-hidden="true">/</span>
+            <span className="hidden sm:inline text-slate-500 whitespace-nowrap truncate">{state.repo.repoName || 'livecut-en'}</span>
+            <span className="hidden sm:inline text-slate-300" aria-hidden="true">/</span>
             <h1 className="font-semibold text-slate-900 whitespace-nowrap truncate">{VIEW_TITLES[activeView]}</h1>
           </div>
 
@@ -234,7 +258,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveView('export')}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
               <PackageCheck className="w-4 h-4" aria-hidden="true" />
               Собрать пакет
@@ -242,64 +266,73 @@ export default function App() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 max-w-6xl w-full mx-auto">
-          {activeView === 'pipeline' && (
-            <PipelineView
-              state={state}
-              onApplyPreset={handleRequestPreset}
-              onUpdateGeneral={handleUpdateGeneral}
-              onUpdateDetector={handleUpdateDetector}
-              onUpdateAi={handleUpdateAi}
-              onAddChannel={handleAddChannel}
-              onToggleChannel={handleToggleChannel}
-              onUpdateChannelField={handleUpdateChannelField}
-              onRemoveChannel={handleRemoveChannel}
-              onUpdateSystemPrompt={(prompt) => setState((prev) => ({ ...prev, systemPrompt: prompt }))}
-              onUpdateHashtags={(tags) => setState((prev) => ({ ...prev, hashtags: tags }))}
-            />
-          )}
+        <main id="main-content" tabIndex={-1} className="flex-1 p-6 max-w-6xl w-full mx-auto outline-none">
+          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Загрузка раздела…</div>}>
+            {activeView === 'pipeline' && (
+              <PipelineView
+                state={state}
+                onApplyPreset={handleRequestPreset}
+                onImportState={(imported) =>
+                  setState((prev) => ({
+                    ...imported,
+                    env: prev.env
+                  }))
+                }
+                onAnnounce={announce}
+                onUpdateGeneral={handleUpdateGeneral}
+                onUpdateDetector={handleUpdateDetector}
+                onUpdateAi={handleUpdateAi}
+                onAddChannel={handleAddChannel}
+                onToggleChannel={handleToggleChannel}
+                onUpdateChannelField={handleUpdateChannelField}
+                onRemoveChannel={handleRemoveChannel}
+                onUpdateSystemPrompt={(prompt) => setState((prev) => ({ ...prev, systemPrompt: prompt }))}
+                onUpdateHashtags={(tags) => setState((prev) => ({ ...prev, hashtags: tags }))}
+              />
+            )}
 
-          {activeView === 'simulator' && (
-            <SimulatorView
-              state={state}
-              clips={clips}
-              onClipAction={handleClipAction}
-              onUpdateLayout={(layout) => handleUpdateGeneral('layout_video', layout)}
-              onAddReactionToken={(token) =>
-                setState((prev) => ({
-                  ...prev,
-                  extraReactions: prev.extraReactions.includes(token)
-                    ? prev.extraReactions
-                    : [...prev.extraReactions, token]
-                }))
-              }
-              onRemoveReactionToken={(token) =>
-                setState((prev) => ({
-                  ...prev,
-                  extraReactions: prev.extraReactions.filter((r) => r !== token)
-                }))
-              }
-              onAddSpamTerm={(term) =>
-                setState((prev) => ({
-                  ...prev,
-                  extraSpamTerms: prev.extraSpamTerms.includes(term)
-                    ? prev.extraSpamTerms
-                    : [...prev.extraSpamTerms, term]
-                }))
-              }
-            />
-          )}
+            {activeView === 'simulator' && (
+              <SimulatorView
+                state={state}
+                clips={clips}
+                onClipAction={handleClipAction}
+                onUpdateLayout={(layout) => handleUpdateGeneral('layout_video', layout)}
+                onAddReactionToken={(token) =>
+                  setState((prev) => ({
+                    ...prev,
+                    extraReactions: prev.extraReactions.includes(token)
+                      ? prev.extraReactions
+                      : [...prev.extraReactions, token]
+                  }))
+                }
+                onRemoveReactionToken={(token) =>
+                  setState((prev) => ({
+                    ...prev,
+                    extraReactions: prev.extraReactions.filter((r) => r !== token)
+                  }))
+                }
+                onAddSpamTerm={(term) =>
+                  setState((prev) => ({
+                    ...prev,
+                    extraSpamTerms: prev.extraSpamTerms.includes(term)
+                      ? prev.extraSpamTerms
+                      : [...prev.extraSpamTerms, term]
+                  }))
+                }
+              />
+            )}
 
-          {activeView === 'setup' && (
-            <SetupView
-              state={state}
-              onUpdateEnv={handleUpdateEnv}
-              onUpdateRepo={handleUpdateRepo}
-              onToggleChecklist={handleToggleChecklist}
-            />
-          )}
+            {activeView === 'setup' && (
+              <SetupView
+                state={state}
+                onUpdateEnv={handleUpdateEnv}
+                onUpdateRepo={handleUpdateRepo}
+                onToggleChecklist={handleToggleChecklist}
+              />
+            )}
 
-          {activeView === 'export' && <ExportView state={state} />}
+            {activeView === 'export' && <ExportView state={state} onAnnounce={announce} />}
+          </Suspense>
         </main>
       </div>
 

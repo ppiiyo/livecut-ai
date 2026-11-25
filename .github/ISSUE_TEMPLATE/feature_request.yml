@@ -1,0 +1,25 @@
+name: Предложить улучшение (Feature Request)
+description: Идея новой функции, пресета или улучшения UX
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую задачу решает предложение?
+      description: Опишите сценарий использования с конвейером livecut-ai.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое решение
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Ограничения проекта
+      options:
+        - label: Решение остаётся 100% клиентским (без собственного бэкенда и телеметрии)
+        - label: Совместимо с форматом config.toml в Teodorox/livecut-ai

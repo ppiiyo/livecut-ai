@@ -1,0 +1,74 @@
+name: Kit E2E against Upstream
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'src/utils/generator.ts'
+      - 'src/data/presets.ts'
+      - 'scripts/make-kit.ts'
+      - '.github/workflows/kit-e2e.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  upstream-patch-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate kit artifacts
+        run: |
+          npm ci
+          npm run make:kit
+
+      - name: Clone Teodorox/livecut-ai and test patch + idempotency + config preservation
+        run: |
+          git clone --depth 1 https://github.com/Teodorox/livecut-ai.git upstream-repo
+          cp kit-dist/apply_en_patch.py upstream-repo/apply_en_patch.py
+          cp kit-dist/config.toml upstream-repo/config.en.toml
+          cd upstream-repo
+
+          # 1. Verify existing config.toml preservation
+          echo "# custom user config" > config.toml
+          python3 apply_en_patch.py > ../run1.log 2>&1
+          cat ../run1.log
+          grep -q "CRITICAL FAILURES: 0" PATCH_REPORT.txt
+          grep -q "SKIP" ../run1.log
+          grep -q "# custom user config" config.toml
+
+          # 2. Verify idempotent second run
+          python3 apply_en_patch.py > ../run2.log 2>&1
+          cat ../run2.log
+          grep -q "CRITICAL FAILURES: 0" PATCH_REPORT.txt
+
+          # 3. Verify TOML validity on generated config.en.toml and Python AST on patched files
+          python3 -c "import tomllib; tomllib.load(open('config.en.toml', 'rb'))"
+          python3 -m compileall -q .
+
+      - name: Open issue on scheduled upstream drift
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Upstream drift detected: apply_en_patch.py E2E failed against Teodorox/livecut-ai',
+              body: `Scheduled kit-e2e run failed on ${new Date().toISOString()}.\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['bug', 'upstream-drift']
+            });

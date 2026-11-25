@@ -438,12 +438,18 @@ def patch(rel, old, new, label, critical=True, regex=False):
     backup(rel)
     p.write_text(out, encoding="utf-8")
     if rel.endswith(".py"):
+        src_parses = True
         try:
-            ast.parse(out)
-        except SyntaxError as exc:
-            shutil.copy2(BACKUP / rel, p)
-            record("FAIL", rel, label + f" (СИНТАКСИС, откачено: {exc})", True)
-            return
+            ast.parse(src)
+        except SyntaxError:
+            src_parses = False
+        if src_parses:
+            try:
+                ast.parse(out)
+            except SyntaxError as exc:
+                shutil.copy2(BACKUP / rel, p)
+                record("FAIL", rel, label + f" (СИНТАКСИС, откачено: {exc})", True)
+                return
     record("OK", rel, label, critical)
 
 

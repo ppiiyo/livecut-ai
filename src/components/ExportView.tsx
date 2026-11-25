@@ -13,11 +13,12 @@ import { createZipBlob } from '../utils/zip';
 
 interface ExportViewProps {
   state: PipelineState;
+  onAnnounce?: (message: string) => void;
 }
 
 type ArtifactKey = 'patch' | 'config' | 'env' | 'setup' | 'readme';
 
-export function ExportView({ state }: ExportViewProps) {
+export function ExportView({ state, onAnnounce }: ExportViewProps) {
   const [selectedFile, setSelectedFile] = useState<ArtifactKey>('patch');
   const [includeEnvSecrets, setIncludeEnvSecrets] = useState(false);
   const [copiedFile, setCopiedFile] = useState(false);
@@ -61,6 +62,7 @@ export function ExportView({ state }: ExportViewProps) {
     try {
       await navigator.clipboard.writeText(active.content);
       setCopiedFile(true);
+      onAnnounce?.(`Файл ${active.filename} скопирован в буфер обмена.`);
       setTimeout(() => setCopiedFile(false), 1800);
     } catch {
       setCopiedFile(false);

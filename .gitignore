@@ -2,6 +2,10 @@ node_modules/
 build/
 dist/
 coverage/
+kit-dist/
+test-results/
+playwright-report/
+.playwright-cli/
 .DS_Store
 *.log
 .env*

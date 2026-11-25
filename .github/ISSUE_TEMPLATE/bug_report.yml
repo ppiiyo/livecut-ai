@@ -1,0 +1,42 @@
+name: Сообщить об ошибке (Bug Report)
+description: Проблема в интерфейсе LiveCut Studio или генерируемых артефактах
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за отчёт! Убедитесь, что перед отправкой вы удалили все API-ключи и токены.
+  - type: textarea
+    id: description
+    attributes:
+      label: Что произошло?
+      description: Кратко опишите ошибку или неверное поведение.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Открыть вкладку ...
+        2. Ввести ...
+        3. Нажать ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое поведение
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Браузер / ОС / версия Python (если касается apply_en_patch.py)
+      placeholder: Chrome 130, Windows 11, Python 3.12
+  - type: textarea
+    id: report
+    attributes:
+      label: Отчёт из ErrorBoundary или консоль (без секретов)
+      render: text

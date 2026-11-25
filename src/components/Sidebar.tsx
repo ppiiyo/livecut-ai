@@ -62,8 +62,8 @@ export function Sidebar({
         </nav>
       </div>
 
-      <div className="hidden lg:block p-5 border-t border-slate-200 space-y-3">
-        <div className="space-y-1.5 text-xs text-slate-600">
+      <div className="p-4 lg:p-5 border-t border-slate-200 space-y-3">
+        <div className="hidden lg:block space-y-1.5 text-xs text-slate-600">
           <div className="flex items-center justify-between">
             <span>Активные каналы</span>
             <span className="font-mono tabular-nums font-medium text-slate-900">{activeChannelsCount}</span>
@@ -83,7 +83,7 @@ export function Sidebar({
         <button
           type="button"
           onClick={onResetDefaults}
-          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
           Сбросить к дефолтам
