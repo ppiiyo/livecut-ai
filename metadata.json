@@ -1,0 +1,6 @@
+{
+  "name": "LiveCut Studio",
+  "description": "Конфигуратор конвейера livecut-ai: каналы, детектор реакций, симулятор Telegram-бота и генератор патч-пакета.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
