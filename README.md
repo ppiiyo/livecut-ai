@@ -11,13 +11,15 @@
 - **Экспорт и импорт JSON-бэкапа**: сохранение и перенос конфигурации (`schemaVersion: 2`) между браузерами. Секретные ключи в бэкап никогда не попадают.
 - **Симулятор детектора и клипов**: предпросмотр `9:16 vertical` и `4:5 noticia`, симуляция кнопок Telegram-куратора, тестирование rate-spike детектора и одиночных сообщений чата на реакции и спам-маски (`*`-стемминг).
 - **Безопасный конструктор `.env` и экспорт в ZIP**: секреты живут только в памяти текущей вкладки (не записываются в `localStorage`), по умолчанию маскируются в `.env.example`, а сборка ZIP выполняется полностью локально.
-- **Совместимый патч `apply_en_patch.py`**: автоматические `.bak_*` резервные копии, проверка `ast.parse` и `tomllib.loads` (Python 3.11+) и защита существующего `config.toml` (создание sidecar `config.en.toml` + `SKIP`).
+- **Совместимый патч `apply_en_patch.py`**: автоматические резервные копии в `_backup_pre_en/`, проверка `ast.parse` и `tomllib.loads`, защита существующего `config.toml` (создание sidecar `config.en.toml` + `SKIP`). Сам патч-скрипт работает на Python 3.10+, тогда как конвейер `livecut-ai` требует **Python ≥3.12** (PEP 701 f-строки в `render.py`).
 
 ## Безопасность и приватность
 
 LiveCut Studio — **100% клиентское статическое приложение**: без бэкенда, баз данных, внешних CDN (шрифты `@fontsource-variable/*` встроены локально) и телеметрии. В production-сборке (`npm run build`) в `index.html` внедряется строгий `Content-Security-Policy` с `connect-src 'none'`. Подробнее: [`SECURITY.md`](./SECURITY.md) и [`PRIVACY.md`](./PRIVACY.md).
 
 ## Локальный запуск и разработка
+
+Используется единый пакетный менеджер `npm` (`package-lock.json`).
 
 ```bash
 npm ci
@@ -43,6 +45,19 @@ npm run test:e2e       # Playwright smoke-тест на production preview
 ```bash
 GITHUB_PAGES=true npm run build
 ```
+
+## Backlog
+
+Функции, вынесенные за рамки `1.0.0` (не входят в текущий релиз):
+- PWA / offline-режим Studio
+- Переключаемый EN-интерфейс конфигуратора
+- Импорт существующего `config.toml` обратно в интерфейс Studio
+- Предпросмотр видеофрагментов на `ffmpeg.wasm`
+- Расширение `chat_youtube` / поддержка чата Kick → YouTube
+- Реальный HTTP `/status`-сервер конвейера
+- Автопостинг в TikTok / YouTube Shorts (gated за одобрением API)
+- Docker / Linux-порт Python-конвейера
+- Параллельный worker-рендер клипов
 
 ## Документация и лицензия
 

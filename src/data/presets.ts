@@ -355,15 +355,15 @@ export const SETUP_CHECKLIST: ChecklistStep[] = [
   {
     id: 'step-python',
     phase: 'Окружение',
-    title: 'Создать venv на Python 3.11–3.13 и поставить зависимости + ffmpeg',
-    detail: 'Для ускорения Whisper и NVENC на видеокартах NVIDIA добавьте cublas и cudnn.',
-    command: 'py -3.13 -m venv .venv && .venv\\Scripts\\activate && pip install -r requirements.txt && winget install --id Gyan.FFmpeg -e'
+    title: 'Создать venv на Python 3.12–3.13 и поставить зависимости + ffmpeg',
+    detail: 'Конвейеру требуется Python ≥3.12 (из-за PEP 701 f-строк в render.py). Для ускорения Whisper и NVENC на NVIDIA добавьте cublas и cudnn.',
+    command: 'py -3.12 -m venv .venv && .venv\\Scripts\\activate && pip install -r requirements.txt && winget install --id Gyan.FFmpeg -e'
   },
   {
     id: 'step-gpu',
     phase: 'Окружение',
     title: 'Установить CUDA-библиотеки (только если есть NVIDIA GPU)',
-    detail: 'Без NVIDIA GPU Whisper автоматически переключится на CPU-модель small.',
+    detail: 'Без NVIDIA GPU Whisper переключается на CPU-модель small (для EN рекомендуется задать WHISPER_CPU_MODEL=medium в .env).',
     command: 'pip install nvidia-cublas-cu12 nvidia-cudnn-cu12'
   },
   {

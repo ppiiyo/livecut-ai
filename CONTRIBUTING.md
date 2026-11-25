@@ -5,8 +5,8 @@
 ## Требования к окружению
 
 - Node.js 22+
-- npm 10+
-- Python 3.11+ (для проверки синтаксиса генерируемого `apply_en_patch.py` и `config.toml`)
+- **Пакетный менеджер: исключительно `npm`** (`npm ci` и `package-lock.json`; не добавляйте `bun.lock` или `yarn.lock`).
+- Python 3.12+ (для проверки синтаксиса конвейера `livecut-ai` и `tomllib`; сам генерируемый патч `apply_en_patch.py` совместим с Python 3.10+).
 
 ## Локальная разработка и проверки
 
@@ -38,12 +38,12 @@ npm run test:e2e     # Playwright smoke на preview-сборке
 - Если у вас сохранён JSON-бэкап, восстановите его через **«Загрузить бэкап»** в разделе «01. Ниша и стартовый пресет».
 
 ### Откат патча `apply_en_patch.py` в репозитории `Teodorox/livecut-ai`
-При каждом запуске `apply_en_patch.py` автоматически сохраняет оригинальные файлы рядом в формате `<filename>.bak_<timestamp>`:
+При каждом запуске `apply_en_patch.py` автоматически сохраняет оригинальные файлы рядом в папку `_backup_pre_en/`:
 
 ```bash
-# Вариант 1: откат через git в рабочей копии livecut-ai
-git checkout -- main.py detector.py curator.py publisher.py settings.py
+# Вариант 1: откат через git в рабочей копии livecut-en
+git checkout -- clipper/ config.toml .gitignore
 
-# Вариант 2: восстановление из .bak_* файлов
-ls -la *.bak_*
+# Вариант 2: восстановление оригиналов из _backup_pre_en/
+dir _backup_pre_en
 ```

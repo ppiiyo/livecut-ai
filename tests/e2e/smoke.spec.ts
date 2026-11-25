@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 test.describe('LiveCut Studio smoke suite', () => {
-  test('renders Russian UI without console/page errors, verifies CSP, preset confirm, slug validation, ZIP download, and zero secret persistence', async ({
+  test('renders Russian UI without console/page errors, verifies CSP, preset confirm, slug export lock, rate-spike verdict, ZIP download, and zero secret persistence', async ({
     page
   }) => {
     const errors: string[] = [];
@@ -36,6 +36,23 @@ test.describe('LiveCut Studio smoke suite', () => {
     await expect(page.getByRole('button', { name: 'Добавить' })).toBeDisabled();
     await page.getByLabel('Канал / @handle').fill('');
 
+    // Invalid perfil_tiktok blocks export until corrected
+    const tiktokInput = page.getByLabel(/Водяной знак профиля/);
+    await tiktokInput.fill('bad handle!');
+    await page.getByRole('button', { name: 'Сборка и экспорт' }).click();
+    await expect(page.getByRole('alert')).toContainText('Экспорт заблокирован');
+    await expect(page.getByRole('button', { name: 'Скачать пакет (.zip)' })).toBeDisabled();
+
+    // Fix perfil_tiktok back to valid handle
+    await page.getByRole('button', { name: 'Конвейер и каналы' }).click();
+    await page.getByLabel(/Водяной знак профиля/).fill('@your_handle');
+
+    // Rate-spike simulator changes verdict dynamically
+    await page.getByRole('button', { name: 'Симулятор клипов' }).click();
+    await expect(page.getByText('Триггер сработает')).toBeVisible();
+    await page.getByLabel('Пиковая скорость (msg/s)').fill('2');
+    await expect(page.getByText('Триггер не сработает')).toBeVisible();
+
     // Secret entered in SetupView must never persist to localStorage or survive reload
     await page.getByRole('button', { name: 'Ключи и чек-лист' }).click();
     const anthropicInput = page.getByLabel(/ANTHROPIC_API_KEY/);
@@ -46,7 +63,7 @@ test.describe('LiveCut Studio smoke suite', () => {
 
     // Download ZIP bundle in ExportView
     await page.getByRole('button', { name: 'Сборка и экспорт' }).click();
-    await expect(page.getByRole('cell', { name: '.env.example' }).or(page.getByText('.env.example').first())).toBeVisible();
+    await expect(page.getByText('.env.example').first()).toBeVisible();
 
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('button', { name: 'Скачать пакет (.zip)' }).click();
