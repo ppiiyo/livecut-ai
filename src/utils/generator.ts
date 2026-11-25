@@ -1,4 +1,4 @@
-import { ClaudeModelId, PipelineState } from '../types/pipeline';
+import { ClaudeModelId, DetectorConfig, PipelineState } from '../types/pipeline';
 
 export interface CostEstimate {
   costPerAnalysisUsd: number;
@@ -7,6 +7,12 @@ export interface CostEstimate {
   cappedByBudget: boolean;
   effectiveDailyAnalyses: number;
 }
+
+export const safeTriple = (s: string): string =>
+  s.replace(/\\/g, '\\\\').replace(/'''/g, "\\'\\'\\'");
+
+export const safeDoubleTriple = (s: string): string =>
+  s.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
 
 export function estimateMonthlyCost(
   clipsPerDay: number,
@@ -19,7 +25,10 @@ export function estimateMonthlyCost(
   // Manual mode typically filters ~45% of noise before calling Claude
   const multiplier = manualMode ? 0.55 : 1;
   const rawDailyAnalyses = Math.round(safeClips * multiplier);
-  const maxByBudget = costPerAnalysisUsd > 0 ? Math.floor(Math.max(0, dailyBudgetUsd) / costPerAnalysisUsd) : 0;
+  const maxByBudget =
+    costPerAnalysisUsd > 0 && dailyBudgetUsd > 0
+      ? Math.floor(dailyBudgetUsd / costPerAnalysisUsd + 1e-9)
+      : 0;
   const effectiveDailyAnalyses = Math.min(rawDailyAnalyses, maxByBudget);
   const cappedByBudget = rawDailyAnalyses > maxByBudget && dailyBudgetUsd > 0;
   const dailyUsd = Number((effectiveDailyAnalyses * costPerAnalysisUsd).toFixed(2));
@@ -43,16 +52,44 @@ export interface ChatFilterResult {
 }
 
 const BASE_REACTIONS = [
-  'lmao', 'lmfao', 'kekw', 'omegalul', 'lulw', 'wtf', 'bruh', 'bro', 'w ', 'gg',
+  'lmao', 'lmfao', 'kekw', 'omegalul', 'lulw', 'wtf', 'bruh', 'bro', 'w', 'gg',
   'kkkk', 'rsrs', 'caralho', '💀', '😂', '🔥', '😭', '🤯'
 ];
 
 const BASE_SPAM = [
-  'link na bio', 'inscrev', 'resgat', 'patrocin', 'publi', 'pix', 'http://', 'https://'
+  'link na bio', 'inscrev*', 'resgat*', 'patrocin*', 'publi', 'pix', 'http://', 'https://'
 ];
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export const reactionPart = (r: string): string => {
+  const escaped = escapeRegex(r);
+  const lead = /^[\p{L}\p{N}]/u.test(r) ? '\\b' : '';
+  const tail = /[\p{L}\p{N}]$/u.test(r) ? '\\b' : '';
+  return `r"${lead}${escaped}${tail}"`;
+};
+
+export const spamTermToRegex = (t: string): string => {
+  const stem = t.endsWith('*');
+  const core = escapeRegex(stem ? t.slice(0, -1) : t);
+  const lead = /^[\p{L}\p{N}]/u.test(t) ? '\\b' : '';
+  if (stem) return `${lead}${core}\\w*`;
+  const tail = /[\p{L}\p{N}]$/u.test(t) ? '\\b' : '';
+  return `${lead}${core}${tail}`;
+};
+
+function buildJsWordRegex(token: string, allowStem: boolean): RegExp {
+  const stem = allowStem && token.endsWith('*');
+  const rawCore = stem ? token.slice(0, -1) : token;
+  const core = escapeRegex(rawCore);
+  const lead = /^[\p{L}\p{N}]/u.test(token) ? '(?<![\\p{L}\\p{N}_])' : '';
+  if (stem) {
+    return new RegExp(`${lead}${core}[\\p{L}\\p{N}_]*`, 'iu');
+  }
+  const tail = /[\p{L}\p{N}]$/u.test(token) ? '(?![\\p{L}\\p{N}_])' : '';
+  return new RegExp(`${lead}${core}${tail}`, 'iu');
 }
 
 export function testChatMessage(
@@ -60,8 +97,8 @@ export function testChatMessage(
   extraReactions: string[],
   extraSpamTerms: string[]
 ): ChatFilterResult {
-  const normalized = message.trim().toLowerCase();
-  if (!normalized) {
+  const trimmed = message.trim();
+  if (!trimmed) {
     return {
       isReaction: false,
       matchedReactions: [],
@@ -71,35 +108,78 @@ export function testChatMessage(
     };
   }
 
-  const allSpam = [...BASE_SPAM, ...extraSpamTerms.map((s) => s.trim().toLowerCase()).filter(Boolean)];
-  const matchedSpam = allSpam.filter((term) => normalized.includes(term));
+  const allSpam = Array.from(
+    new Set([...BASE_SPAM, ...extraSpamTerms.map((s) => s.trim().toLowerCase()).filter(Boolean)])
+  );
+  const matchedSpam = allSpam.filter((term) => buildJsWordRegex(term, true).test(trimmed));
 
-  const allReactions = [...BASE_REACTIONS, ...extraReactions.map((r) => r.trim().toLowerCase()).filter(Boolean)];
-  const matchedReactions: string[] = [];
-
-  for (const token of allReactions) {
-    const clean = token.trim();
-    if (!clean) continue;
-    if (/[\u{1F300}-\u{1FAFF}]/u.test(clean)) {
-      if (normalized.includes(clean)) matchedReactions.push(clean);
-    } else {
-      const pattern = new RegExp(`\\b${escapeRegex(clean)}\\b`, 'i');
-      if (pattern.test(normalized)) {
-        matchedReactions.push(clean);
-      }
-    }
-  }
+  const allReactions = Array.from(
+    new Set([...BASE_REACTIONS, ...extraReactions.map((r) => r.trim().toLowerCase()).filter(Boolean)])
+  );
+  const matchedReactions = allReactions.filter((token) => buildJsWordRegex(token, false).test(trimmed));
 
   const isSpam = matchedSpam.length > 0;
   const isReaction = !isSpam && matchedReactions.length > 0;
 
   return {
     isReaction,
-    matchedReactions: Array.from(new Set(matchedReactions)),
+    matchedReactions,
     isSpam,
-    matchedSpam: Array.from(new Set(matchedSpam)),
+    matchedSpam,
     verdict: isSpam ? 'ignored_spam' : isReaction ? 'trigger_candidate' : 'neutral'
   };
+}
+
+export interface RateSpikeResult {
+  triggered: boolean;
+  ratio: number;
+  isLargeChat: boolean;
+  windowMsgs: number;
+  reason: string;
+}
+
+export function simulateRateSpike(
+  detectorCfg: DetectorConfig,
+  baselineMsgsPerSec: number,
+  spikeMsgsPerSec: number,
+  reactionPct: number
+): RateSpikeResult {
+  const safeBaseline = Math.max(0, Number.isFinite(baselineMsgsPerSec) ? baselineMsgsPerSec : 0);
+  const safeSpike = Math.max(0, Number.isFinite(spikeMsgsPerSec) ? spikeMsgsPerSec : 0);
+  const safeReactionPct = Math.max(0, Math.min(100, Number.isFinite(reactionPct) ? reactionPct : 0));
+  const reactionFrac = safeReactionPct / 100;
+
+  const denom = Math.max(safeBaseline, 0.3);
+  const ratio = Number((safeSpike / denom).toFixed(2));
+  const isLargeChat = safeBaseline >= detectorCfg.chat_grande_msgs_s;
+  const windowMsgs = Math.round(safeSpike * detectorCfg.janela_segundos);
+
+  if (isLargeChat) {
+    const pureSpike = ratio >= 2.5;
+    const reactionSpike =
+      ratio >= detectorCfg.chat_grande_multiplicador &&
+      reactionFrac >= detectorCfg.chat_grande_reacao;
+    const triggered = pureSpike || reactionSpike;
+    const reason = pureSpike
+      ? `Большой чат: всплеск ${ratio.toFixed(2)}× ≥ 2.5× (срабатывает без порога реакций)`
+      : reactionSpike
+      ? `Большой чат: ${ratio.toFixed(2)}× ≥ ${detectorCfg.chat_grande_multiplicador}× и реакции ${safeReactionPct.toFixed(0)}% ≥ ${(detectorCfg.chat_grande_reacao * 100).toFixed(0)}%`
+      : `Недостаточный всплеск для большого чата (${ratio.toFixed(2)}×, реакции ${safeReactionPct.toFixed(0)}%)`;
+    return { triggered, ratio, isLargeChat, windowMsgs, reason };
+  }
+
+  const pureSpike = ratio >= detectorCfg.multiplicador_forte;
+  const reactionSpike =
+    ratio >= detectorCfg.multiplicador_minimo &&
+    reactionFrac >= detectorCfg.reacao_minima;
+  const triggered = pureSpike || reactionSpike;
+  const reason = pureSpike
+    ? `Сильный всплеск: ${ratio.toFixed(2)}× ≥ ${detectorCfg.multiplicador_forte}×`
+    : reactionSpike
+    ? `Всплеск ${ratio.toFixed(2)}× ≥ ${detectorCfg.multiplicador_minimo}× и реакции ${safeReactionPct.toFixed(0)}% ≥ ${(detectorCfg.reacao_minima * 100).toFixed(0)}%`
+    : `Порог не достигнут (${ratio.toFixed(2)}× при реакциях ${safeReactionPct.toFixed(0)}%)`;
+
+  return { triggered, ratio, isLargeChat, windowMsgs, reason };
 }
 
 export function generateConfigToml(state: PipelineState): string {
@@ -114,8 +194,12 @@ export function generateConfigToml(state: PipelineState): string {
         `plataforma = ${JSON.stringify(ch.plataforma)}`,
         `canal = ${JSON.stringify(ch.canal)}`,
         `idioma = ${JSON.stringify(ch.idioma)}`,
-        `layout = ${JSON.stringify(ch.layout)}`,
+        `layout = ${JSON.stringify(ch.layout)}`
       ];
+      if (ch.layout === 'facecam' && ch.facecam) {
+        const coords = ch.facecam.map((n) => Number(n.toFixed(3))).join(', ');
+        lines.push(`facecam = [${coords}]`);
+      }
       if (ch.deteccao !== 'chat') {
         lines.push(`deteccao = ${JSON.stringify(ch.deteccao)}`);
       }
@@ -277,12 +361,12 @@ export function generatePatchScript(state: PipelineState): string {
   const reactionRegexParts = state.extraReactions
     .map((r) => r.trim())
     .filter(Boolean)
-    .map((r) => `r"\\b${r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b"`);
+    .map((r) => reactionPart(r));
 
   const spamRegexParts = state.extraSpamTerms
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    .map((s) => spamTermToRegex(s));
 
   const tagList = state.hashtags
     .map((t) => t.replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '').toLowerCase())
@@ -290,16 +374,12 @@ export function generatePatchScript(state: PipelineState): string {
     .slice(0, 4);
   const pythonTags = tagList.map((t) => JSON.stringify(t)).join(', ');
 
-  // Escape triple quotes safely for Python raw/triple-quoted blocks
-  const safeTriple = (str: string) => str.replace(/'''/g, "\\'\\'\\'");
-  const safeDoubleTriple = (str: string) => str.replace(/"""/g, '\\"\\"\\"');
-
   return `#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 livecut-ai -> ${state.repo.repoName || 'livecut-en'}  |  Generated by LiveCut Studio
 Запуск:  python apply_en_patch.py   (из корня клона livecut-ai, Python 3.10+)
-Делает бэкапы в _backup_pre_en/, проверяет каждую правку, парсит AST и пишет PATCH_REPORT.txt.
+Делает бэкапы в _backup_pre_en/, проверяет каждую правку, парсит AST/TOML и пишет PATCH_REPORT.txt.
 Повторный запуск безопасен (уже применённые изменения пропускаются).
 """
 import ast
@@ -368,9 +448,19 @@ def patch(rel, old, new, label, critical=True, regex=False):
 
 
 def write_new(rel, content, label, overwrite=False):
+    if rel.endswith(".toml"):
+        try:
+            import tomllib
+            try:
+                tomllib.loads(content)
+            except Exception as exc:
+                record("FAIL", rel, label + f" (невалидный TOML: {exc})", True)
+                return
+        except ModuleNotFoundError:
+            pass
     p = ROOT / rel
     if p.exists() and not overwrite:
-        alt = p.with_name(p.stem + ".generated" + p.suffix)
+        alt = p.with_name(p.stem + ".en" + p.suffix)
         alt.write_text(content, encoding="utf-8")
         record("SKIP", rel, label + f" (существует -> записан {alt.name})", False)
         return
@@ -496,7 +586,7 @@ patch("clipper/render.py", 'f"{ch.name} no GTA 6"', 'f"{ch.name} in GTA 6"', "he
 
 # ============================================================ 5. CONFIG, ENV & DOCS
 CONFIG = '''${safeTriple(configToml)}'''
-write_new("config.toml", CONFIG, "config.toml", overwrite=True)
+write_new("config.toml", CONFIG, "config.toml")
 
 ENV_TEMPLATE = '''${safeTriple(envTemplate)}'''
 if not (ROOT / ".env").exists():

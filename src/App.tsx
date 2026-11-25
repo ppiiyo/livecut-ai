@@ -15,13 +15,17 @@ import {
   SETUP_CHECKLIST,
   SYSTEM_PROMPTS
 } from './data/presets';
+import {
+  parseStoredPipelineState,
+  serializeStateWithoutSecrets,
+  STORAGE_KEY
+} from './utils/storage';
 import { Sidebar } from './components/Sidebar';
 import { PipelineView } from './components/PipelineView';
 import { SimulatorView } from './components/SimulatorView';
 import { SetupView } from './components/SetupView';
 import { ExportView } from './components/ExportView';
-
-const STORAGE_KEY = 'livecut_studio_state_v1';
+import { ConfirmDialog } from './components/ConfirmDialog';
 
 const VIEW_TITLES: Record<ViewId, string> = {
   pipeline: 'Конвейер и каналы',
@@ -34,35 +38,32 @@ function loadInitialState(): PipelineState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
-    const parsed = JSON.parse(raw) as Partial<PipelineState>;
-    return {
-      ...DEFAULT_STATE,
-      ...parsed,
-      general: { ...DEFAULT_STATE.general, ...parsed.general },
-      detector: { ...DEFAULT_STATE.detector, ...parsed.detector },
-      ai: { ...DEFAULT_STATE.ai, ...parsed.ai },
-      env: { ...DEFAULT_STATE.env, ...parsed.env },
-      repo: { ...DEFAULT_STATE.repo, ...parsed.repo }
-    };
+    return parseStoredPipelineState(raw);
   } catch {
     return DEFAULT_STATE;
   }
 }
 
+type PendingConfirm =
+  | { type: 'preset'; presetId: PresetId; label: string }
+  | { type: 'reset' }
+  | null;
+
 export default function App() {
   const [state, setState] = useState<PipelineState>(loadInitialState);
   const [activeView, setActiveView] = useState<ViewId>('pipeline');
   const [clips, setClips] = useState<SimulatedClip[]>(INITIAL_SIMULATED_CLIPS);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, serializeStateWithoutSecrets(state));
     } catch {
       // Ignore storage quota errors
     }
   }, [state]);
 
-  const handleApplyPreset = (presetId: PresetId) => {
+  const applyPresetNow = (presetId: PresetId) => {
     const meta = PRESET_METADATA[presetId];
     setState((prev) => ({
       ...prev,
@@ -77,6 +78,26 @@ export default function App() {
         layout_video: 'vertical'
       }
     }));
+  };
+
+  const handleRequestPreset = (presetId: PresetId) => {
+    if (presetId === state.presetId) return;
+    setPendingConfirm({
+      type: 'preset',
+      presetId,
+      label: PRESET_METADATA[presetId].label
+    });
+  };
+
+  const handleConfirmAction = () => {
+    if (!pendingConfirm) return;
+    if (pendingConfirm.type === 'preset') {
+      applyPresetNow(pendingConfirm.presetId);
+    } else {
+      setState(DEFAULT_STATE);
+      setClips(INITIAL_SIMULATED_CLIPS);
+    }
+    setPendingConfirm(null);
   };
 
   const handleUpdateGeneral = <K extends keyof PipelineState['general']>(
@@ -187,11 +208,6 @@ export default function App() {
     });
   };
 
-  const handleResetDefaults = () => {
-    setState(DEFAULT_STATE);
-    setClips(INITIAL_SIMULATED_CLIPS);
-  };
-
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-slate-50 text-slate-900">
       <Sidebar
@@ -201,11 +217,10 @@ export default function App() {
         manualMode={state.ai.aprovacao_manual}
         completedSteps={state.completedChecklistIds.length}
         totalSteps={SETUP_CHECKLIST.length}
-        onResetDefaults={handleResetDefaults}
+        onResetDefaults={() => setPendingConfirm({ type: 'reset' })}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top Bar Contract: Breadcrumb on left, 1 primary CTA on right */}
         <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between gap-8 shrink-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
             <span className="text-slate-500 whitespace-nowrap">Проекты</span>
@@ -231,7 +246,7 @@ export default function App() {
           {activeView === 'pipeline' && (
             <PipelineView
               state={state}
-              onApplyPreset={handleApplyPreset}
+              onApplyPreset={handleRequestPreset}
               onUpdateGeneral={handleUpdateGeneral}
               onUpdateDetector={handleUpdateDetector}
               onUpdateAi={handleUpdateAi}
@@ -287,6 +302,19 @@ export default function App() {
           {activeView === 'export' && <ExportView state={state} />}
         </main>
       </div>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.type === 'reset' ? 'Сбросить к дефолтам?' : 'Переключить пресет?'}
+        message={
+          pendingConfirm?.type === 'reset'
+            ? 'Заменить текущие каналы, промпт и настройки значениями по умолчанию? Отменить нельзя.'
+            : `Заменить текущие каналы и промпт пресетом «${pendingConfirm?.type === 'preset' ? pendingConfirm.label : ''}»? Отменить нельзя.`
+        }
+        confirmLabel={pendingConfirm?.type === 'reset' ? 'Сбросить' : 'Заменить'}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }

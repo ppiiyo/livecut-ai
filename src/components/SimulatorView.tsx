@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Copy, Check, Video, MessageSquareText, RotateCcw } from 'lucide-react';
+import { Copy, Check, Video, MessageSquareText, RotateCcw, Info, Activity } from 'lucide-react';
 import { PipelineState, SimulatedClip } from '../types/pipeline';
-import { testChatMessage } from '../utils/generator';
+import { simulateRateSpike, testChatMessage } from '../utils/generator';
 
 interface SimulatorViewProps {
   state: PipelineState;
@@ -48,6 +48,9 @@ export function SimulatorView({
   const [chatInput, setChatInput] = useState('NO WAY he is cooked 💀');
   const [newReaction, setNewReaction] = useState('');
   const [newSpam, setNewSpam] = useState('');
+  const [baselineRate, setBaselineRate] = useState(1.0);
+  const [spikeRate, setSpikeRate] = useState(4.0);
+  const [reactionPct, setReactionPct] = useState(30);
 
   const activeClip = clips.find((c) => c.id === selectedId) ?? clips[0];
   const stageMeta = activeClip ? STAGE_LABELS[activeClip.stage] : null;
@@ -56,6 +59,7 @@ export function SimulatorView({
   const fullCaptionText = activeClip ? `${activeClip.caption}\n\n${fullTags}` : '';
 
   const chatCheck = testChatMessage(chatInput, state.extraReactions, state.extraSpamTerms);
+  const spikeResult = simulateRateSpike(state.detector, baselineRate, spikeRate, reactionPct);
 
   const handleCopyCaption = async () => {
     if (!fullCaptionText) return;
@@ -137,14 +141,12 @@ export function SimulatorView({
 
         {activeClip && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Видеофрейм */}
             <div className="lg:col-span-5 bg-slate-950 rounded-lg p-6 flex flex-col items-center justify-center border border-slate-800">
               <div
                 className={`w-full max-w-[290px] bg-slate-900 border border-slate-700 rounded-lg overflow-hidden flex flex-col justify-between relative ${
                   state.general.layout_video === 'vertical' ? 'aspect-[9/16]' : 'aspect-[4/5]'
                 }`}
               >
-                {/* Верхняя часть — геймплей / вебкамка */}
                 {activeClip.channelLayout === 'fundo' ? (
                   <div className="flex-1 bg-gradient-to-b from-slate-800 via-slate-900 to-slate-950 p-4 flex flex-col justify-between">
                     <div className="flex items-center justify-between text-[11px] text-slate-300">
@@ -196,7 +198,6 @@ export function SimulatorView({
                   </div>
                 )}
 
-                {/* Нижняя новостная плашка только для режима 4:5 noticia */}
                 {state.general.layout_video === 'noticia' && (
                   <div className="bg-white text-slate-900 p-3.5 border-t border-slate-200 space-y-1.5">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-red-700">
@@ -213,7 +214,6 @@ export function SimulatorView({
               </div>
             </div>
 
-            {/* Сообщение Telegram-бота */}
             <div className="lg:col-span-7 bg-white border border-slate-200 rounded-lg p-5 space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-4">
                 <div>
@@ -266,7 +266,6 @@ export function SimulatorView({
                 </div>
               </div>
 
-              {/* Кнопки Telegram */}
               <div className="pt-3 border-t border-slate-200 space-y-2">
                 <div className="text-xs font-medium text-slate-500">
                   Интерактивные кнопки в Telegram ({state.ai.aprovacao_manual ? 'ручная калибровка' : 'полный автомат'})
@@ -336,15 +335,98 @@ export function SimulatorView({
         )}
       </section>
 
-      {/* 2. Тестер словаря реакций и анти-спама (detector.py) */}
+      {/* 2. Информационный баннер + Симулятор всплеска */}
+      <section aria-labelledby="spike-sim-heading" className="bg-white border border-slate-200 rounded-lg p-5 space-y-5">
+        <div className="flex items-start gap-3 p-3.5 rounded-lg bg-slate-50 text-slate-700 text-xs leading-relaxed">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" aria-hidden="true" />
+          <div>
+            Симулятор ниже проверяет одно сообщение (реакция/спам). Реальный конвейер срабатывает на ВСПЛЕСК ЧАСТОТЫ: ≥2.5× к базовой линии за 10с + доля реакций ≥25% (или ≥4× без реакций). Одно сообщение с NO WAY само по себе клип не создаст.
+          </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="spike-sim-heading" className="text-base font-semibold text-slate-900">
+              02. Симулятор всплеска частоты чата (detector.py)
+            </h2>
+            <p className="text-sm text-slate-500">
+              Проверьте, сработает ли триггер при текущих настройках <span className="font-mono">multiplicador_minimo</span> и порога реакций.
+            </p>
+          </div>
+          <Activity className="w-5 h-5 text-slate-400 shrink-0" aria-hidden="true" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end">
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="spike-baseline" className="block text-xs font-medium text-slate-700 mb-1.5">
+                Базовая скорость (msg/s)
+              </label>
+              <input
+                id="spike-baseline"
+                type="number"
+                min={0}
+                max={100}
+                step={0.5}
+                value={baselineRate}
+                onChange={(e) => setBaselineRate(Number(e.target.value))}
+                className="w-full h-10 px-3 text-sm font-mono tabular-nums bg-white border border-slate-200 rounded-lg"
+              />
+            </div>
+            <div>
+              <label htmlFor="spike-rate" className="block text-xs font-medium text-slate-700 mb-1.5">
+                Пиковая скорость (msg/s)
+              </label>
+              <input
+                id="spike-rate"
+                type="number"
+                min={0}
+                max={300}
+                step={0.5}
+                value={spikeRate}
+                onChange={(e) => setSpikeRate(Number(e.target.value))}
+                className="w-full h-10 px-3 text-sm font-mono tabular-nums bg-white border border-slate-200 rounded-lg"
+              />
+            </div>
+            <div>
+              <label htmlFor="spike-reactions" className="block text-xs font-medium text-slate-700 mb-1.5">
+                Доля реакций (%)
+              </label>
+              <input
+                id="spike-reactions"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={reactionPct}
+                onChange={(e) => setReactionPct(Number(e.target.value))}
+                className="w-full h-10 px-3 text-sm font-mono tabular-nums bg-white border border-slate-200 rounded-lg"
+              />
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 p-3.5 rounded-lg bg-slate-50 space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-mono tabular-nums">
+              <span>{spikeResult.isLargeChat ? 'Режим большого чата' : 'Стандартный чат'}</span>
+              <span>{spikeResult.ratio.toFixed(2)}× · ~{spikeResult.windowMsgs} msg/10s</span>
+            </div>
+            <div className={`text-sm font-semibold ${spikeResult.triggered ? 'text-emerald-700' : 'text-slate-700'}`}>
+              {spikeResult.triggered ? 'Триггер сработает' : 'Триггер не сработает'}
+            </div>
+            <div className="text-xs text-slate-600">{spikeResult.reason}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Тестер словаря реакций и анти-спама */}
       <section aria-labelledby="detector-test-heading" className="bg-white border border-slate-200 rounded-lg p-5 space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="detector-test-heading" className="text-base font-semibold text-slate-900">
-              02. Тестер реакций чата и анти-спам фильтра (detector.py)
+              03. Тестер одного сообщения (реакции и анти-спам)
             </h2>
             <p className="text-sm text-slate-500">
-              Проверьте любое сообщение из чата стримера — попадёт ли оно в триггер реакций или будет отсеяно как реклама/розыгрыш.
+              Проверьте любое сообщение из чата стримера — засчитается ли оно как реакция или будет отсеяно как реклама/розыгрыш.
             </p>
           </div>
           <MessageSquareText className="w-5 h-5 text-slate-400 shrink-0" aria-hidden="true" />
@@ -367,8 +449,8 @@ export function SimulatorView({
               {[
                 'NO WAY he is cooked 💀',
                 'use code SPEED for 20% off',
-                'ахахах ору что он делает',
-                'just watching the stream'
+                'pixel art is public here',
+                'ахахах ору что он делает'
               ].map((sample) => (
                 <button
                   key={sample}
@@ -383,10 +465,10 @@ export function SimulatorView({
           </div>
 
           <div className="p-4 rounded-lg bg-slate-50 space-y-2">
-            <div className="text-xs font-medium text-slate-500">Результат проверки detector.py</div>
+            <div className="text-xs font-medium text-slate-500">Результат проверки одного сообщения</div>
             <div className="text-sm font-semibold">
               {chatCheck.verdict === 'trigger_candidate' && (
-                <span className="text-emerald-700">Сработает как реакция чата (ускоряет триггер клипа)</span>
+                <span className="text-emerald-700">Распознано как реакция (увеличивает долю реакций в окне)</span>
               )}
               {chatCheck.verdict === 'ignored_spam' && (
                 <span className="text-red-700">Отфильтровано как реклама / розыгрыш</span>
@@ -402,7 +484,6 @@ export function SimulatorView({
           </div>
         </div>
 
-        {/* Редактирование дополнительных токенов */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-200">
           <div className="space-y-2">
             <label htmlFor="add-reaction-input" className="block text-xs font-medium text-slate-700">
@@ -414,7 +495,7 @@ export function SimulatorView({
                 type="text"
                 value={newReaction}
                 onChange={(e) => setNewReaction(e.target.value)}
-                placeholder="например: cinema"
+                placeholder="например: cinema или 💀"
                 className="flex-1 h-9 px-3 text-sm font-mono bg-white border border-slate-200 rounded-md"
               />
               <button
@@ -457,7 +538,7 @@ export function SimulatorView({
                 type="text"
                 value={newSpam}
                 onChange={(e) => setNewSpam(e.target.value)}
-                placeholder="например: airdrop"
+                placeholder="например: airdrop или subscrib*"
                 className="flex-1 h-9 px-3 text-sm font-mono bg-white border border-slate-200 rounded-md"
               />
               <button
@@ -473,6 +554,9 @@ export function SimulatorView({
                 Добавить стоп-слово
               </button>
             </div>
+            <p className="text-xs text-slate-500">
+              Добавьте <span className="font-mono">*</span> в конце термина для матча по префиксу (стем).
+            </p>
             <div className="text-xs text-slate-600 font-mono leading-relaxed">
               {state.extraSpamTerms.join(' · ')}
             </div>

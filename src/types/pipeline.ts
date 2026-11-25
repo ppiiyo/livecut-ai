@@ -1,6 +1,6 @@
 export type Platform = 'twitch' | 'youtube' | 'kick';
-export type ChannelLayout = 'auto' | 'fundo' | 'split';
-export type DetectionMode = 'chat' | 'audio' | 'ambos' | 'clipes';
+export type ChannelLayout = 'auto' | 'fundo' | 'facecam';
+export type DetectionMode = 'chat' | 'audio' | 'ambos';
 export type VideoLayout = 'vertical' | 'noticia';
 export type SubtitleStyle = 'karaoke' | 'neon' | 'classico' | 'por_do_sol' | 'faixa' | 'hq';
 export type PresetId = 'en-gta6' | 'ru-gta6' | 'en-gaming';
@@ -14,6 +14,7 @@ export interface ChannelConfig {
   canal: string;
   idioma: 'en' | 'ru' | 'pt';
   layout: ChannelLayout;
+  facecam?: [number, number, number, number];
   deteccao: DetectionMode;
   min_msgs: number;
   enabled: boolean;

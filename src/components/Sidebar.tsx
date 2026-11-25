@@ -86,7 +86,7 @@ export function Sidebar({
           className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-          Сбросить к EN-старту
+          Сбросить к дефолтам
         </button>
       </div>
     </aside>

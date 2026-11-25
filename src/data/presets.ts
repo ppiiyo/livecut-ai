@@ -178,21 +178,21 @@ export const PRESET_METADATA: Record<
     subtitle: 'IShowSpeed, TheBurntPeanut, Kai Cenat, CaseOh — готовый EN патч под запуск GTA 6',
     hashtags: ['gta6', 'gta', 'fyp', 'shorts'],
     extraReactions: ['no way', 'cooked', 'npc', 'crash out', 'tweakin', 'is this real', 'deadass'],
-    extraSpamTerms: ['winner', 'subscrib', 'use code', 'promo code', 'discount code', 'merch', 'link in bio', 'hit the bell', 'sponsored']
+    extraSpamTerms: ['winner', 'subscrib*', 'use code', 'promo code', 'discount code', 'merch', 'link in bio', 'hit the bell', 'sponsored']
   },
   'ru-gta6': {
     label: 'GTA 6 · Русский (RU-аудитория)',
     subtitle: 'Кириллические реакции чата, русский промпт куратора и рекомендации по шрифтам',
     hashtags: ['gta6', 'гта6', 'нарезка', 'shorts'],
     extraReactions: ['ахах', 'ахаха', 'ору', 'жесть', 'имба', 'кринж', 'легенда', 'чел', 'туда'],
-    extraSpamTerms: ['розыгрыш', 'промокод', 'ссылка в описании', 'подпишись', 'реклама', 'конкурс']
+    extraSpamTerms: ['розыгрыш*', 'промокод*', 'ссылка в описании', 'подпиш*', 'реклам*', 'конкурс*']
   },
   'en-gaming': {
     label: 'Twitch Variety · English',
     subtitle: 'Универсальный пресет для любых англоязычных игровых и IRL-стримов',
     hashtags: ['twitch', 'gaming', 'fyp', 'shorts'],
     extraReactions: ['no way', 'cooked', 'npc', 'crash out', 'tweakin', 'clip it', 'actual cinema'],
-    extraSpamTerms: ['winner', 'subscrib', 'use code', 'promo code', 'merch', 'link in bio', 'sponsored']
+    extraSpamTerms: ['winner', 'subscrib*', 'use code', 'promo code', 'merch', 'link in bio', 'sponsored']
   }
 };
 

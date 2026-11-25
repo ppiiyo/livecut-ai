@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 import {
   ChannelConfig,
@@ -13,6 +13,7 @@ import {
 } from '../types/pipeline';
 import { PRESET_METADATA } from '../data/presets';
 import { estimateMonthlyCost } from '../utils/generator';
+import { validateChannelSlug, validateTiktokProfile } from '../utils/validation';
 
 interface PipelineViewProps {
   state: PipelineState;
@@ -27,6 +28,8 @@ interface PipelineViewProps {
   onUpdateSystemPrompt: (prompt: string) => void;
   onUpdateHashtags: (tags: string[]) => void;
 }
+
+const DEFAULT_FACECAM: [number, number, number, number] = [0.02, 0.65, 0.25, 0.3];
 
 export function PipelineView({
   state,
@@ -51,6 +54,14 @@ export function PipelineView({
   const [channelError, setChannelError] = useState('');
   const [tagDraft, setTagDraft] = useState(state.hashtags.join(', '));
 
+  useEffect(() => {
+    setTagDraft(state.hashtags.join(', '));
+  }, [state.hashtags]);
+
+  useEffect(() => {
+    setNewLanguage(state.presetId === 'ru-gta6' ? 'ru' : 'en');
+  }, [state.presetId]);
+
   const cost = estimateMonthlyCost(
     state.ai.estimatedClipsPerDay,
     state.ai.model,
@@ -61,12 +72,20 @@ export function PipelineView({
   const hasRuChannelWithNoticia =
     state.general.layout_video === 'noticia' && state.channels.some((c) => c.enabled && c.idioma === 'ru');
 
+  const liveSlugError = newHandle.trim() ? validateChannelSlug(newPlatform, newHandle) : null;
+  const tiktokError = validateTiktokProfile(state.general.perfil_tiktok);
+
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanName = newName.trim();
     const cleanHandle = newHandle.trim();
-    if (!cleanName || !cleanHandle) {
-      setChannelError('Укажите отображаемое имя стримера и логин/канал.');
+    if (!cleanName) {
+      setChannelError('Укажите отображаемое имя стримера.');
+      return;
+    }
+    const slugErr = validateChannelSlug(newPlatform, cleanHandle);
+    if (slugErr) {
+      setChannelError(slugErr);
       return;
     }
     setChannelError('');
@@ -84,9 +103,16 @@ export function PipelineView({
     setNewHandle('');
   };
 
+  const updateFacecamCoord = (ch: ChannelConfig, index: 0 | 1 | 2 | 3, value: number) => {
+    const base: [number, number, number, number] = ch.facecam ? [...ch.facecam] : [...DEFAULT_FACECAM];
+    const clamped = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+    base[index] = clamped;
+    onUpdateChannelField(ch.id, 'facecam', base);
+  };
+
   return (
     <div className="space-y-8">
-      {/* 1. Пресет ниши и метрики бюджета */}
+      {/* 1. Пресет ниши */}
       <section aria-labelledby="preset-heading" className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div>
@@ -107,11 +133,7 @@ export function PipelineView({
               <button
                 key={id}
                 type="button"
-                onClick={() => {
-                  onApplyPreset(id);
-                  setTagDraft(PRESET_METADATA[id].hashtags.join(', '));
-                  setNewLanguage(id === 'ru-gta6' ? 'ru' : 'en');
-                }}
+                onClick={() => onApplyPreset(id)}
                 className={`p-4 text-left rounded-lg border transition-colors ${
                   active
                     ? 'bg-white border-blue-600 ring-1 ring-blue-600'
@@ -231,7 +253,6 @@ export function PipelineView({
           </div>
         </div>
 
-        {/* Прогноз расходов — без карточек-матрешек, единая табличная полоса */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-200">
           <div>
             <div className="text-xs text-slate-500">Анализов в день</div>
@@ -274,7 +295,7 @@ export function PipelineView({
               03. Каналы мониторинга ([[canais]])
             </h2>
             <p className="text-sm text-slate-500">
-              Управляйте списком стримеров, порогом сообщений чата и режимом вебкамки.
+              Дождь клипов на Twitch работает автоматически при наличии ключей Twitch.
             </p>
           </div>
           <div className="text-xs text-slate-500 font-mono tabular-nums">
@@ -305,82 +326,136 @@ export function PipelineView({
                   </td>
                 </tr>
               ) : (
-                state.channels.map((ch) => (
-                  <tr key={ch.id} className={`hover:bg-slate-50 ${!ch.enabled ? 'opacity-50' : ''}`}>
-                    <td className="py-2.5 px-4">
-                      <input
-                        type="checkbox"
-                        checked={ch.enabled}
-                        aria-label={`Включить канал ${ch.nome}`}
-                        onChange={() => onToggleChannel(ch.id)}
-                        className="w-4 h-4 accent-blue-600"
-                      />
-                    </td>
-                    <td className="py-2.5 px-4 font-medium text-slate-900 whitespace-nowrap">{ch.nome}</td>
-                    <td className="py-2.5 px-4 text-slate-600 font-mono text-xs">{ch.plataforma}</td>
-                    <td className="py-2.5 px-4 text-slate-700 font-mono text-xs">{ch.canal}</td>
-                    <td className="py-2.5 px-4">
-                      <select
-                        aria-label={`Язык для ${ch.nome}`}
-                        value={ch.idioma}
-                        onChange={(e) => onUpdateChannelField(ch.id, 'idioma', e.target.value as 'en' | 'ru' | 'pt')}
-                        className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
-                      >
-                        <option value="en">en</option>
-                        <option value="ru">ru</option>
-                        <option value="pt">pt</option>
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <select
-                        aria-label={`Макет камеры для ${ch.nome}`}
-                        value={ch.layout}
-                        onChange={(e) => onUpdateChannelField(ch.id, 'layout', e.target.value as ChannelLayout)}
-                        className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
-                      >
-                        <option value="auto">auto</option>
-                        <option value="fundo">fundo (без камеры)</option>
-                        <option value="split">split</option>
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-4">
-                      <select
-                        aria-label={`Режим детекции для ${ch.nome}`}
-                        value={ch.deteccao}
-                        onChange={(e) => onUpdateChannelField(ch.id, 'deteccao', e.target.value as DetectionMode)}
-                        className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
-                      >
-                        <option value="chat">chat</option>
-                        <option value="ambos">ambos (чат + аудио)</option>
-                        <option value="audio">audio</option>
-                        <option value="clipes">clipes</option>
-                      </select>
-                    </td>
-                    <td className="py-2.5 px-4 text-right">
-                      <input
-                        type="number"
-                        min={5}
-                        max={200}
-                        aria-label={`Порог сообщений для ${ch.nome}`}
-                        value={ch.min_msgs}
-                        onChange={(e) =>
-                          onUpdateChannelField(ch.id, 'min_msgs', Math.max(5, Number(e.target.value) || 5))
-                        }
-                        className="w-16 h-8 px-2 text-right text-xs font-mono tabular-nums bg-white border border-slate-200 rounded"
-                      />
-                    </td>
-                    <td className="py-2.5 px-4 text-right">
-                      <button
-                        type="button"
-                        aria-label={`Удалить канал ${ch.nome}`}
-                        onClick={() => onRemoveChannel(ch.id)}
-                        className="inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                state.channels.map((ch) => {
+                  const rowSlugError = ch.enabled ? validateChannelSlug(ch.plataforma, ch.canal) : null;
+                  return (
+                    <Fragment key={ch.id}>
+                      <tr className={`hover:bg-slate-50 ${!ch.enabled ? 'opacity-50' : ''}`}>
+                        <td className="py-2.5 px-4">
+                          <input
+                            type="checkbox"
+                            checked={ch.enabled}
+                            aria-label={`Включить канал ${ch.nome}`}
+                            onChange={() => onToggleChannel(ch.id)}
+                            className="w-4 h-4 accent-blue-600"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 font-medium text-slate-900 whitespace-nowrap">{ch.nome}</td>
+                        <td className="py-2.5 px-4 text-slate-600 font-mono text-xs">{ch.plataforma}</td>
+                        <td className="py-2.5 px-4">
+                          <div className="text-slate-700 font-mono text-xs">{ch.canal}</div>
+                          {rowSlugError && <div className="text-[11px] text-red-600 mt-0.5">{rowSlugError}</div>}
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <select
+                            aria-label={`Язык для ${ch.nome}`}
+                            value={ch.idioma}
+                            onChange={(e) => onUpdateChannelField(ch.id, 'idioma', e.target.value as 'en' | 'ru' | 'pt')}
+                            className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
+                          >
+                            <option value="en">en</option>
+                            <option value="ru">ru</option>
+                            <option value="pt">pt</option>
+                          </select>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <select
+                            aria-label={`Макет камеры для ${ch.nome}`}
+                            value={ch.layout}
+                            onChange={(e) =>
+                              onUpdateChannelField(ch.id, 'layout', e.target.value as ChannelLayout)
+                            }
+                            className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
+                          >
+                            <option value="auto">auto</option>
+                            <option value="fundo">fundo (без камеры)</option>
+                            <option value="facecam">facecam</option>
+                          </select>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <select
+                            aria-label={`Режим детекции для ${ch.nome}`}
+                            value={ch.deteccao}
+                            onChange={(e) =>
+                              onUpdateChannelField(ch.id, 'deteccao', e.target.value as DetectionMode)
+                            }
+                            className="h-8 px-2 text-xs bg-white border border-slate-200 rounded"
+                          >
+                            <option value="chat">chat</option>
+                            <option value="ambos">ambos (чат + аудио)</option>
+                            <option value="audio">audio</option>
+                          </select>
+                        </td>
+                        <td className="py-2.5 px-4 text-right">
+                          <input
+                            type="number"
+                            min={5}
+                            max={200}
+                            aria-label={`Порог сообщений для ${ch.nome}`}
+                            value={ch.min_msgs}
+                            onChange={(e) =>
+                              onUpdateChannelField(ch.id, 'min_msgs', Math.max(5, Number(e.target.value) || 5))
+                            }
+                            className="w-16 h-8 px-2 text-right text-xs font-mono tabular-nums bg-white border border-slate-200 rounded"
+                          />
+                        </td>
+                        <td className="py-2.5 px-4 text-right">
+                          <button
+                            type="button"
+                            aria-label={`Удалить канал ${ch.nome}`}
+                            onClick={() => onRemoveChannel(ch.id)}
+                            className="inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                      {ch.layout === 'facecam' && (
+                        <tr className="bg-slate-50/70">
+                          <td colSpan={9} className="px-4 py-2.5 text-xs">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span className="font-medium text-slate-700">
+                                Координаты facecam [x, y, w, h] в долях 0..1:
+                              </span>
+                              {(['x', 'y', 'w', 'h'] as const).map((axis, idx) => (
+                                <label key={axis} className="inline-flex items-center gap-1 text-slate-600">
+                                  <span className="font-mono">{axis}</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    placeholder="auto"
+                                    value={ch.facecam ? ch.facecam[idx as 0 | 1 | 2 | 3] : ''}
+                                    onChange={(e) =>
+                                      updateFacecamCoord(
+                                        ch,
+                                        idx as 0 | 1 | 2 | 3,
+                                        Number(e.target.value)
+                                      )
+                                    }
+                                    className="w-16 h-7 px-1.5 font-mono tabular-nums bg-white border border-slate-200 rounded"
+                                  />
+                                </label>
+                              ))}
+                              {ch.facecam ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onUpdateChannelField(ch.id, 'facecam', undefined)}
+                                  className="text-xs text-slate-600 hover:text-slate-900 underline"
+                                >
+                                  Очистить координаты
+                                </button>
+                              ) : (
+                                <span className="text-slate-500">Без координат поведёт себя как auto</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -424,10 +499,12 @@ export function PipelineView({
               <input
                 id="add-handle"
                 type="text"
-                placeholder="xqc"
+                placeholder={newPlatform === 'youtube' ? '@xQc' : 'xqc'}
                 value={newHandle}
                 onChange={(e) => setNewHandle(e.target.value)}
-                className="w-full h-9 px-2.5 text-sm font-mono bg-white border border-slate-200 rounded-md"
+                className={`w-full h-9 px-2.5 text-sm font-mono bg-white border rounded-md ${
+                  liveSlugError ? 'border-red-500' : 'border-slate-200'
+                }`}
               />
             </div>
             <div>
@@ -442,7 +519,7 @@ export function PipelineView({
               >
                 <option value="auto">auto</option>
                 <option value="fundo">fundo</option>
-                <option value="split">split</option>
+                <option value="facecam">facecam</option>
               </select>
             </div>
             <div>
@@ -477,14 +554,17 @@ export function PipelineView({
             <div>
               <button
                 type="submit"
-                className="w-full h-9 inline-flex items-center justify-center gap-1.5 px-3 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors whitespace-nowrap"
+                disabled={Boolean(liveSlugError)}
+                className="w-full h-9 inline-flex items-center justify-center gap-1.5 px-3 text-sm font-medium text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 Добавить
               </button>
             </div>
           </div>
-          {channelError && <p className="text-xs text-red-600 font-medium">{channelError}</p>}
+          {(liveSlugError || channelError) && (
+            <p className="text-xs text-red-600 font-medium">{liveSlugError || channelError}</p>
+          )}
         </form>
       </section>
 
@@ -505,8 +585,11 @@ export function PipelineView({
                 type="text"
                 value={state.general.perfil_tiktok}
                 onChange={(e) => onUpdateGeneral('perfil_tiktok', e.target.value)}
-                className="w-full h-10 px-3 text-sm font-mono bg-white border border-slate-200 rounded-lg"
+                className={`w-full h-10 px-3 text-sm font-mono bg-white border rounded-lg ${
+                  tiktokError ? 'border-red-500' : 'border-slate-200'
+                }`}
               />
+              {tiktokError && <p className="mt-1 text-xs text-red-600">{tiktokError}</p>}
             </div>
 
             <div>

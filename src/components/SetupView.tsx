@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Copy, Check, ShieldAlert } from 'lucide-react';
 import { PipelineState } from '../types/pipeline';
 import { SETUP_CHECKLIST } from '../data/presets';
+import { validateGithubUser, validateRepoName } from '../utils/validation';
 
 interface SetupViewProps {
   state: PipelineState;
@@ -12,6 +13,9 @@ interface SetupViewProps {
 
 export function SetupView({ state, onUpdateEnv, onUpdateRepo, onToggleChecklist }: SetupViewProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const ghUserError = validateGithubUser(state.repo.githubUser);
+  const repoNameError = validateRepoName(state.repo.repoName);
 
   const copyCommand = async (id: string, text: string) => {
     try {
@@ -44,7 +48,7 @@ git push -u origin main`;
           </div>
           <div className="inline-flex items-center gap-1.5 text-xs text-slate-600 shrink-0">
             <ShieldAlert className="w-4 h-4 text-slate-500" aria-hidden="true" />
-            <span>Ключи хранятся только в вашем браузере</span>
+            <span>Ключи хранятся только в памяти вкладки и не сохраняются между сессиями</span>
           </div>
         </div>
 
@@ -200,7 +204,7 @@ git push -u origin main`;
                     </div>
                   </label>
                   {step.command && (
-                    <div className="ml-7 flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+                    <div className="ml-7 flex items-center justify-between gap-2 bg-slate-50 rounded-md px-3 py-2">
                       <code className="text-xs font-mono text-slate-800 overflow-x-auto whitespace-nowrap">
                         {step.command}
                       </code>
@@ -237,8 +241,11 @@ git push -u origin main`;
                 type="text"
                 value={state.repo.githubUser}
                 onChange={(e) => onUpdateRepo('githubUser', e.target.value)}
-                className="w-full h-9 px-3 text-sm font-mono bg-white border border-slate-200 rounded-md"
+                className={`w-full h-9 px-3 text-sm font-mono bg-white border rounded-md ${
+                  ghUserError ? 'border-red-500' : 'border-slate-200'
+                }`}
               />
+              {ghUserError && <p className="mt-1 text-xs text-red-600">{ghUserError}</p>}
             </div>
             <div>
               <label htmlFor="gh-repo" className="block text-xs font-medium text-slate-700 mb-1">
@@ -249,8 +256,11 @@ git push -u origin main`;
                 type="text"
                 value={state.repo.repoName}
                 onChange={(e) => onUpdateRepo('repoName', e.target.value)}
-                className="w-full h-9 px-3 text-sm font-mono bg-white border border-slate-200 rounded-md"
+                className={`w-full h-9 px-3 text-sm font-mono bg-white border rounded-md ${
+                  repoNameError ? 'border-red-500' : 'border-slate-200'
+                }`}
               />
+              {repoNameError && <p className="mt-1 text-xs text-red-600">{repoNameError}</p>}
             </div>
           </div>
 
