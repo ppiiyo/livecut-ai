@@ -13,7 +13,7 @@ test.describe('LiveCut Studio smoke suite', () => {
       }
     });
 
-    await page.goto('/');
+    await page.goto('./');
     await expect(page).toHaveTitle(/LiveCut Studio/);
     await expect(page.getByRole('heading', { name: /Конвейер и каналы/i })).toBeVisible();
 
@@ -82,6 +82,7 @@ test.describe('LiveCut Studio smoke suite', () => {
     await page.getByRole('button', { name: 'Ключи и чек-лист' }).click();
     await expect(page.getByLabel(/ANTHROPIC_API_KEY/)).toHaveValue('');
 
+    await expect(page.getByText(/Что-то пошло не так/i)).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });
