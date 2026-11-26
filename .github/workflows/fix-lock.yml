@@ -1,0 +1,36 @@
+name: Fix package-lock
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore full lock from green commit
+        run: |
+          set -euo pipefail
+          git config user.name "ppiiyo"
+          git config user.email "ppiiyo@users.noreply.github.com"
+          # Full lock with lucide-react 0.577 from last green commit
+          git checkout c0517e86affee3160c07e1ecfa857f1d213fd8f7 -- package-lock.json
+          if git diff --quiet -- package-lock.json; then
+            echo "lock already matches"
+          else
+            git add package-lock.json
+            git commit -m "fix: restore full package-lock.json (lucide-react 0.577)"
+            git push origin HEAD:main
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
